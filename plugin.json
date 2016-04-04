@@ -1,0 +1,13 @@
+{
+    	"id": "nodebb-plugin-import-disqus",
+    	"name": "nodebb-plugin-import-disqus",
+    	"description": "A VBulletin to NodeBB data exporter",
+    	"url": "https://github.com/akhoury/nodebb-plugin-import-disqus",
+	"library": "./admin/index.js",
+	"hooks": [
+		{ "hook": "filter:admin.header.build", "method": "admin.menu"},
+		{ "hook": "static:app.load", "method": "admin.load"}
+	],
+    	"templates": "./public/templates",
+    	"minver": "0.5.0"
+}
