@@ -3,7 +3,7 @@ var fs = require('fs-extra');
 require('./index').testrun({
 	custom: {
 		file: '',
-		nbbIdName: ''
+		nbbIdAttr: 'nbb:id'
 	}
 }, function(err, results) {
 	console.log("getUsers", Object.keys(results[2]).length);

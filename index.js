@@ -28,7 +28,7 @@ var logPrefix = '[nodebb-plugin-import-disqus]';
 		config.custom = config.custom || {};
 		config.custom = extend(true, {}, {
 			file: '',
-			nbbid: ''
+			nbbIdAttr: 'nbb:id'
 		}, config.custom);
 
 		Exporter.config('custom', config.custom);
