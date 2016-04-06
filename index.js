@@ -4,6 +4,7 @@ var async = require('async');
 var fs = require('fs');
 var xml2js = require('xml2js');
 var _ = require('underscore');
+var moment = require('moment');
 var noop = function(){};
 var logPrefix = '[nodebb-plugin-import-disqus]';
 
@@ -41,12 +42,78 @@ var logPrefix = '[nodebb-plugin-import-disqus]';
 				return callback(err);
 			}
 
-			parser.parseString(data, function (err, result) {
-				Exporter.json = result;
-				console.log(JSON.stringify(result, undefined, 2));
-			});
+			parser.parseString(data, function (err, parsed) {
+				var result = {};
 
-			throw "STOP - HAMMER TIME";
+				var _users = {};
+				var maybeAddUser = function (user) {
+					if (! _users[user.email]) {
+						_users[user.email] = user;
+					}
+				};
+
+				result.categories = parsed.disqus.category.map(function(c) {
+						return {
+							_cid: c["$"]["dsq:id"],
+							_title: c["title"][0]
+						};
+				});
+
+				result.topics = parsed.disqus.thread.map(function(t) {
+					var author = {
+						email: key(t, "author.0.email.0"),
+						username: key(t, "author.0.username.0"),
+						name: key(t, "author.0.name.0"),
+						anonymous: !!resolve(key(t, "author.0.anonymous.0"))
+					};
+					if (!author.anonymous) {
+						maybeAddUser(author);
+					}
+
+					return {
+						_tid: t["$"]["dsq:id"],
+						tid: t["$"]["nbb:id"] || t["$"]["nbb:tid"],
+						_uemail: author.email,
+						_handle: author.username || author.email || author.name,
+
+						_cid: t["category"][0]["$"]["dsq:id"],
+						_link: "",
+						_title: t["title"][0],
+						_content: t["message"][0],
+						_timestamp: moment(t["createdAt"][0]).valueOf(),
+						_ip: t["ipAddress"][0],
+						_locked: resolve(t["isClosed"][0]),
+						_deleted: resolve(t["isDeleted"][0])
+					};
+				});
+
+				result.posts = parsed.disqus.post.map(function(p) {
+					var author = {
+						email: key(p, "author.0.email.0"),
+						username: key(p, "author.0.username.0"),
+						name: key(p, "author.0.name.0"),
+						anonymous: !!resolve(key(p, "author.0.anonymous.0"))
+					};
+
+					if (!author.anonymous) {
+						maybeAddUser(author);
+					}
+
+					return {
+						_pid: p["$"]["dsq:id"],
+						_tid: p["thread"][0]["$"]["dsq:id"],
+						_uemail: author.email,
+						_handle: author.username || author.email || author.name,
+						_content: p["message"][0],
+						_timestamp: moment(p["createdAt"][0]).valueOf(),
+						_ip: p["ipAddress"][0],
+						_deleted: resolve(p["isDeleted"][0]),
+						_spam: resolve(p["isSpam"][0])
+					}
+				});
+				console.log(JSON.stringify(result, undefined, 2));
+				throw "STOP - HAMMER TIME";
+			});
 		});
 
 	};
@@ -190,24 +257,36 @@ var logPrefix = '[nodebb-plugin-import-disqus]';
 		return Exporter._config;
 	};
 
-	// from Angular https://github.com/angular/angular.js/blob/master/src/ng/directive/input.js#L11
-	Exporter.validateUrl = function(url) {
-		var pattern = /^(ftp|http|https):\/\/(\w+:{0,1}\w*@)?(\S+)(:[0-9]+)?(\/|\/([\w#!:.?+=&%@!\-\/]))?$/;
-		return url && url.length < 2083 && url.match(pattern) ? url : '';
-	};
+	function resolve (token) {
+		if(typeof token != "string")
+			return token;
+		if (token.length < 15 && token.match(/^-?\d+(\.\d+)?$/))
+			return parseFloat(token);
+		if(token.match(/^true|false$/i))
+			return Boolean( token.match(/true/i));
+		if(token === "undefined")
+			return undefined;
+		if(token === "null")
+			token = null;
+		return token;
+	}
 
-	Exporter.truncateStr = function(str, len) {
-		if (typeof str != 'string') return str;
-		len = _.isNumber(len) && len > 3 ? len : 20;
-		return str.length <= len ? str : str.substr(0, len - 3) + '...';
-	};
+	function key (parent, key) {
+		var parts = key.split(".");
 
-	Exporter.whichIsFalsy = function(arr) {
-		for (var i = 0; i < arr.length; i++) {
-			if (!arr[i])
-				return i;
+		var k, node = parent;
+		while( k  = parts.shift() ){
+			if( parts.length == 0 ){
+				return node[k];
+			}
+			else if( typeof node[k] == "object" ){
+				node = node[k];
+			}
+			else {
+				break;
+			}
 		}
 		return null;
-	};
+	}
 
 })(module.exports);
