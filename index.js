@@ -1,7 +1,8 @@
 
 var extend = require('extend');
 var async = require('async');
-var mysql = require('mysql');
+var fs = require('fs');
+var xml2js = require('xml2js');
 var _ = require('underscore');
 var noop = function(){};
 var logPrefix = '[nodebb-plugin-import-disqus]';
@@ -27,13 +28,27 @@ var logPrefix = '[nodebb-plugin-import-disqus]';
 
 		config.custom = config.custom || {};
 		config.custom = extend(true, {}, {
-			file: '',
-			nbbIdAttr: 'nbb:id'
+			filepath: '',
+			nbbIdAttrPrefix: 'nbb:',
+			skipSpamPosts: true
 		}, config.custom);
-
 		Exporter.config('custom', config.custom);
 
-		callback(null, Exporter.config());
+
+		var parser = new xml2js.Parser();
+		fs.readFile(config.custom.filepath, function(err, data) {
+			if (err) {
+				return callback(err);
+			}
+
+			parser.parseString(data, function (err, result) {
+				Exporter.json = result;
+				console.log(JSON.stringify(result, undefined, 2));
+			});
+
+			throw "STOP - HAMMER TIME";
+		});
+
 	};
 
 	Exporter.countUsers = function (callback) {

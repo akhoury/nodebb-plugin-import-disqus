@@ -2,8 +2,7 @@ var fs = require('fs-extra');
 
 require('./index').testrun({
 	custom: {
-		file: '',
-		nbbIdAttr: 'nbb:id'
+		filepath: __dirname + '/my-file.xml'
 	}
 }, function(err, results) {
 	console.log("getUsers", Object.keys(results[2]).length);
