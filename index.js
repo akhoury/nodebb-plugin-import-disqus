@@ -61,7 +61,7 @@ var logPrefix = '[nodebb-plugin-import-disqus]';
 
 				result.categories = parsed.disqus.category.map(function(obj, index) {
 						return {
-							cid: key(obj, "$.nbb:id") || key(obj, "$.nbb:cid"),
+							// cid: key(obj, "$.nbb:id") || key(obj, "$.nbb:cid"),
 							_cid: key(obj, "$.dsq:id"),
 							_title: key(obj, "title.0"),
 							_description: key(obj, "description.0") || "",
@@ -76,14 +76,14 @@ var logPrefix = '[nodebb-plugin-import-disqus]';
 					}
 
 					return {
-						tid: key(obj, "$.nbb:id") || key(obj, "$.nbb:tid"),
+						// tid: key(obj, "$.nbb:id") || key(obj, "$.nbb:tid"),
 						_tid: key(obj, "$.dsq:id"),
 						_uemail: author._email,
 						_handle: author._username || author._email || author._name,
 						_link: key(obj, "_link.0"),
 						_cid: key(obj, "category.0.$.dsq:id"),
 						_title: key(obj, "title.0"),
-						_content: key(obj, "message.0"),
+						_content: key(obj, "message.0") || "{{{____________________content-placeholder____________________}}}",
 						_timestamp: moment(key(obj, "createdAt.0")).valueOf(),
 						_ip: key(obj, "ipAddress.0"),
 						_locked: resolve(key(obj, "isClosed.0")),
@@ -98,7 +98,7 @@ var logPrefix = '[nodebb-plugin-import-disqus]';
 					}
 
 					return {
-						pid: key(obj, "$.nbb:id") || key(obj, "$.nbb:pid"),
+						// pid: key(obj, "$.nbb:id") || key(obj, "$.nbb:pid"),
 						_pid: key(obj, "$.dsq:id") || (index + 1),
 						_tid: key(obj, "thread.0.$.dsq:id"),
 						_uemail: author._email,
