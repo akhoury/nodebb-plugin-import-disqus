@@ -30,7 +30,6 @@ var logPrefix = '[nodebb-plugin-import-disqus]';
 		config.custom = config.custom || {};
 		config.custom = extend(true, {}, {
 			filepath: '',
-			nbbIdAttrPrefix: 'nbb:',
 			skipSpamPosts: true
 		}, config.custom);
 		Exporter.config('custom', config.custom);
@@ -46,73 +45,81 @@ var logPrefix = '[nodebb-plugin-import-disqus]';
 				var result = {};
 
 				var _users = {};
-				var maybeAddUser = function (user) {
-					if (! _users[user.email]) {
-						_users[user.email] = user;
+				var addUser = function (user) {
+					if (! _users[user._email]) {
+						_users[user._email] = user;
 					}
 				};
+				var grabAuthor = function (obj) {
+					return {
+						_email: key(obj, "author.0.email.0"),
+						_username: key(obj, "author.0.username.0"),
+						_name: key(obj, "author.0.name.0"),
+						_anonymous: !!resolve(key(obj, "author.0.anonymous.0"))
+					};
+				};
 
-				result.categories = parsed.disqus.category.map(function(c) {
+				result.categories = parsed.disqus.category.map(function(obj, index) {
 						return {
-							_cid: c["$"]["dsq:id"],
-							_title: c["title"][0]
+							cid: key(obj, "$.nbb:id") || key(obj, "$.nbb:cid"),
+							_cid: key(obj, "$.dsq:id"),
+							_title: key(obj, "title.0"),
+							_description: key(obj, "description.0") || "",
+							_order: key(obj, "order.0") || (index + 1)
 						};
 				});
 
-				result.topics = parsed.disqus.thread.map(function(t) {
-					var author = {
-						email: key(t, "author.0.email.0"),
-						username: key(t, "author.0.username.0"),
-						name: key(t, "author.0.name.0"),
-						anonymous: !!resolve(key(t, "author.0.anonymous.0"))
-					};
-					if (!author.anonymous) {
-						maybeAddUser(author);
+				result.topics = parsed.disqus.thread.map(function(obj, index) {
+					var author = grabAuthor(obj);
+					if (!author._anonymous) {
+						addUser(author);
 					}
 
 					return {
-						_tid: t["$"]["dsq:id"],
-						tid: t["$"]["nbb:id"] || t["$"]["nbb:tid"],
-						_uemail: author.email,
-						_handle: author.username || author.email || author.name,
-
-						_cid: t["category"][0]["$"]["dsq:id"],
-						_link: "",
-						_title: t["title"][0],
-						_content: t["message"][0],
-						_timestamp: moment(t["createdAt"][0]).valueOf(),
-						_ip: t["ipAddress"][0],
-						_locked: resolve(t["isClosed"][0]),
-						_deleted: resolve(t["isDeleted"][0])
+						tid: key(obj, "$.nbb:id") || key(obj, "$.nbb:tid"),
+						_tid: key(obj, "$.dsq:id"),
+						_uemail: author._email,
+						_handle: author._username || author._email || author._name,
+						_link: key(obj, "_link.0"),
+						_cid: key(obj, "category.0.$.dsq:id"),
+						_title: key(obj, "title.0"),
+						_content: key(obj, "message.0"),
+						_timestamp: moment(key(obj, "createdAt.0")).valueOf(),
+						_ip: key(obj, "ipAddress.0"),
+						_locked: resolve(key(obj, "isClosed.0")),
+						_deleted: resolve(key(obj, "isDeleted.0"))
 					};
 				});
 
-				result.posts = parsed.disqus.post.map(function(p) {
-					var author = {
-						email: key(p, "author.0.email.0"),
-						username: key(p, "author.0.username.0"),
-						name: key(p, "author.0.name.0"),
-						anonymous: !!resolve(key(p, "author.0.anonymous.0"))
-					};
-
-					if (!author.anonymous) {
-						maybeAddUser(author);
+				result.posts = parsed.disqus.post.map(function(obj, index) {
+					var author = grabAuthor(obj);
+					if (!author._anonymous) {
+						addUser(author);
 					}
 
 					return {
-						_pid: p["$"]["dsq:id"],
-						_tid: p["thread"][0]["$"]["dsq:id"],
-						_uemail: author.email,
-						_handle: author.username || author.email || author.name,
-						_content: p["message"][0],
-						_timestamp: moment(p["createdAt"][0]).valueOf(),
-						_ip: p["ipAddress"][0],
-						_deleted: resolve(p["isDeleted"][0]),
-						_spam: resolve(p["isSpam"][0])
+						pid: key(obj, "$.nbb:id") || key(obj, "$.nbb:pid"),
+						_pid: key(obj, "$.dsq:id") || (index + 1),
+						_tid: key(obj, "thread.0.$.dsq:id"),
+						_uemail: author._email,
+						_handle: author._username || author._email || author._name,
+						_content: key(obj, "message.0"),
+						_timestamp: moment(key(obj, "createdAt.0")).valueOf(),
+						_ip: key(obj, "ipAddress.0"),
+						_deleted: resolve(key(obj, "isDeleted.0")),
+						_spam: resolve(key(obj, "isSpam.0"))
 					}
 				});
-				console.log(JSON.stringify(result, undefined, 2));
-				throw "STOP - HAMMER TIME";
+
+				result.users = Object.keys(_users).map(function(email, i) {
+					_users[email]._uid = (i + 1);
+					_users[email]._username = !_users[email]._username || /^disqus_/.test(_users[email]._username) ? _users[email]._name || _users[email]._email : _users[email]._username;
+					_users[email]._alternativeUsername = _users[email]._name;
+					return _users[email];
+				});
+
+				Exporter.results = result;
+				callback(null, Exporter.config);
 			});
 		});
 
@@ -120,60 +127,62 @@ var logPrefix = '[nodebb-plugin-import-disqus]';
 
 	Exporter.countUsers = function (callback) {
 		callback = !_.isFunction(callback) ? noop : callback;
-
+		setImmediate(function() {
+			callback(null, Object.keys(Exporter.results.users).length);
+		});
 	};
 
 	Exporter.getUsers = function(callback) {
-		return Exporter.getPaginatedUsers(0, -1, callback);
-	};
-	Exporter.getPaginatedUsers = function(start, limit, callback) {
 		callback = !_.isFunction(callback) ? noop : callback;
-
+		setImmediate(function() {
+			callback(null, _.indexBy(Exporter.results.users, '_uid'), Exporter.results.users);
+		});
 	};
 
 	Exporter.countCategories = function(callback) {
 		callback = !_.isFunction(callback) ? noop : callback;
-
+		setImmediate(function() {
+			callback(null, Object.keys(Exporter.results.categories).length);
+		});
 	};
 
 	Exporter.getCategories = function(callback) {
-		return Exporter.getPaginatedCategories(0, -1, callback);
-	};
-
-	Exporter.getPaginatedCategories = function(start, limit, callback) {
 		callback = !_.isFunction(callback) ? noop : callback;
-
+		setImmediate(function() {
+			callback(null, _.indexBy(Exporter.results.categories, '_cid'), Exporter.results.categories);
+		});
 	};
 
 	Exporter.countTopics = function(callback) {
 		callback = !_.isFunction(callback) ? noop : callback;
-
+		setImmediate(function() {
+			callback(null, Object.keys(Exporter.results.topics).length);
+		});
 	};
 
 	Exporter.getTopics = function(callback) {
-		return Exporter.getPaginatedTopics(0, -1, callback);
-	};
-	Exporter.getPaginatedTopics = function(start, limit, callback) {
 		callback = !_.isFunction(callback) ? noop : callback;
+		setImmediate(function() {
+			callback(null, _.indexBy(Exporter.results.topics, '_tid'), Exporter.results.topics);
+		});
 	};
 
 	Exporter.countPosts = function(callback) {
 		callback = !_.isFunction(callback) ? noop : callback;
-
+		setImmediate(function() {
+			callback(null, Object.keys(Exporter.results.posts).length);
+		});
 	};
 
 	Exporter.getPosts = function(callback) {
-		return Exporter.getPaginatedPosts(0, -1, callback);
-	};
-
-	Exporter.getPaginatedPosts = function(start, limit, callback) {
 		callback = !_.isFunction(callback) ? noop : callback;
+		setImmediate(function() {
+			callback(null, _.indexBy(Exporter.results.posts, '_pid'), Exporter.results.posts);
+		});
 	};
 
 	Exporter.teardown = function(callback) {
 		Exporter.log('teardown');
-		Exporter.connection.end();
-
 		Exporter.log('Done');
 		callback();
 	};
@@ -194,29 +203,6 @@ var logPrefix = '[nodebb-plugin-import-disqus]';
 			},
 			function(next) {
 				Exporter.getPosts(next);
-			},
-			function(next) {
-				Exporter.teardown(next);
-			}
-		], callback);
-	};
-
-	Exporter.paginatedTestrun = function(config, callback) {
-		async.series([
-			function(next) {
-				Exporter.setup(config, next);
-			},
-			function(next) {
-				Exporter.getPaginatedUsers(0, 1000, next);
-			},
-			function(next) {
-				Exporter.getPaginatedCategories(0, 1000, next);
-			},
-			function(next) {
-				Exporter.getPaginatedTopics(0, 1000, next);
-			},
-			function(next) {
-				Exporter.getPaginatedPosts(1001, 2000, next);
 			},
 			function(next) {
 				Exporter.teardown(next);
