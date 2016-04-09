@@ -55,6 +55,7 @@ var logPrefix = '[nodebb-plugin-import-disqus]';
 						_email: key(obj, "author.0.email.0"),
 						_username: key(obj, "author.0.username.0"),
 						_name: key(obj, "author.0.name.0"),
+						_joindate: moment(key(obj, "createdAt.0")).valueOf(),
 						_anonymous: !!resolve(key(obj, "author.0.anonymous.0"))
 					};
 				};
